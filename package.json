@@ -1,6 +1,7 @@
 {
   "name": "@jtsang/qdrant-mcp",
   "version": "0.9.0",
+  "private": false,
   "type": "module",
   "author": {
     "name": "James Tsang",
@@ -33,7 +34,6 @@
     "typescript": "^5.9.3",
     "vitest": "^4.0.8"
   },
-  "private": true,
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.22.0",
     "openai": "^6.9.0",
