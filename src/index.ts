@@ -7,9 +7,7 @@ async function main(): Promise<void> {
   await server.run();
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
-  main().catch((error) => {
-    console.error('Server error:', error);
-    process.exit(1);
-  });
-}
+main().catch((error) => {
+  console.error('Server error:', error);
+  process.exit(1);
+});
