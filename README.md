@@ -95,9 +95,46 @@ export COLLECTION_NAME="my-collection"
 
 2. Configure your MCP client to connect to the server via stdio.
 
+### With npx (Recommended)
+
+You can run the Qdrant MCP server directly using npx without manual installation:
+
+```bash
+npx @jtsang/qdrant-mcp
+```
+
+For usage with environment variables:
+
+```bash
+OPENAI_API_KEY="your-openai-api-key" \
+QDRANT_URL="http://localhost:6333" \
+COLLECTION_NAME="my-collection" \
+npx @jtsang/qdrant-mcp
+```
+
 ### With Claude Desktop
 
 Add the following to your Claude Desktop configuration file:
+
+#### Option 1: Using npx (Recommended)
+
+```json
+{
+  "mcpServers": {
+    "qdrant": {
+      "command": "npx",
+      "args": ["-y", "@jtsang/qdrant-mcp"],
+      "env": {
+        "OPENAI_API_KEY": "your-openai-api-key",
+        "QDRANT_URL": "http://localhost:6333",
+        "COLLECTION_NAME": "my-collection"
+      }
+    }
+  }
+}
+```
+
+#### Option 2: Using local installation
 
 ```json
 {
@@ -105,6 +142,31 @@ Add the following to your Claude Desktop configuration file:
     "qdrant": {
       "command": "node",
       "args": ["/path/to/qdrant-mcp/dist/index.js"],
+      "env": {
+        "OPENAI_API_KEY": "your-openai-api-key",
+        "QDRANT_URL": "http://localhost:6333",
+        "COLLECTION_NAME": "my-collection"
+      }
+    }
+  }
+}
+```
+
+#### Option 3: Windows compatibility
+
+For Windows users who encounter npx execution issues, use this configuration:
+
+```json
+{
+  "mcpServers": {
+    "qdrant": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@jtsang/qdrant-mcp"
+      ],
       "env": {
         "OPENAI_API_KEY": "your-openai-api-key",
         "QDRANT_URL": "http://localhost:6333",

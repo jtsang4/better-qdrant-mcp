@@ -1,7 +1,11 @@
 {
-  "name": "qdrant-mcp",
-  "version": "1.0.0",
+  "name": "@jtsang/qdrant-mcp",
+  "version": "0.9.0",
   "type": "module",
+  "author": {
+    "name": "James Tsang",
+    "email": "info@jtsang.me"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
