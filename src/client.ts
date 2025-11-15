@@ -1,9 +1,15 @@
-// Configuration
-interface QdrantConfig {
-  url: string;
-  apiKey?: string;
-  defaultCollection?: string;
-}
+import type {
+  ApiResponse,
+  NamedVectorConfig,
+  PointPayload,
+  QdrantConfig,
+  QdrantPoint,
+  QdrantScrollResponse,
+  QdrantSearchResponse,
+  ScrollRequestBody,
+  SearchRequestBody,
+  SearchResult,
+} from './types';
 
 // Qdrant HTTP API Client
 export class QdrantHttpClient {
@@ -52,7 +58,34 @@ export class QdrantHttpClient {
     }
   }
 
-  async upsertPoints(collectionName: string, points: any[]): Promise<void> {
+  async createCollectionWithNamedVectors(
+    collectionName: string,
+    vectorsConfig: Record<string, number>,
+  ): Promise<void> {
+    const vectors: NamedVectorConfig = {};
+    Object.entries(vectorsConfig).forEach(([name, size]) => {
+      vectors[name] = {
+        size: size,
+        distance: 'Cosine',
+      };
+    });
+
+    const response = await this.makeRequest(`/collections/${collectionName}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        vectors: vectors,
+      }),
+    });
+
+    if (!response.ok && response.status !== 409) {
+      throw new Error(`Failed to create collection: ${response.statusText}`);
+    }
+  }
+
+  async upsertPoints(
+    collectionName: string,
+    points: QdrantPoint[],
+  ): Promise<void> {
     const response = await this.makeRequest(
       `/collections/${collectionName}/points`,
       {
@@ -66,11 +99,38 @@ export class QdrantHttpClient {
     if (!response.ok) {
       let errorDetails = response.statusText;
       try {
-        const errorResponse = (await response.json()) as any;
+        const errorResponse = (await response.json()) as ApiResponse;
         errorDetails =
-          errorResponse.error?.message ||
-          errorResponse.status?.error ||
-          JSON.stringify(errorResponse);
+          errorResponse.error?.message || JSON.stringify(errorResponse);
+      } catch {
+        // If we can't parse the error response, use the status text
+      }
+      throw new Error(
+        `Failed to upsert points in collection '${collectionName}': ${errorDetails}`,
+      );
+    }
+  }
+
+  async upsertPointsWithNamedVectors(
+    collectionName: string,
+    points: QdrantPoint[],
+  ): Promise<void> {
+    const response = await this.makeRequest(
+      `/collections/${collectionName}/points`,
+      {
+        method: 'PUT',
+        body: JSON.stringify({
+          points: points,
+        }),
+      },
+    );
+
+    if (!response.ok) {
+      let errorDetails = response.statusText;
+      try {
+        const errorResponse = (await response.json()) as ApiResponse;
+        errorDetails =
+          errorResponse.error?.message || JSON.stringify(errorResponse);
       } catch {
         // If we can't parse the error response, use the status text
       }
@@ -85,8 +145,8 @@ export class QdrantHttpClient {
     queryVector: number[],
     limit: number = 5,
     vectorName?: string,
-  ): Promise<any[]> {
-    const requestBody: any = {
+  ): Promise<SearchResult[]> {
+    const requestBody: SearchRequestBody = {
       limit: limit,
       with_payload: true,
     };
@@ -112,11 +172,9 @@ export class QdrantHttpClient {
     if (!response.ok) {
       let errorDetails = response.statusText;
       try {
-        const errorResponse = (await response.json()) as any;
+        const errorResponse = (await response.json()) as ApiResponse;
         errorDetails =
-          errorResponse.error?.message ||
-          errorResponse.status?.error ||
-          JSON.stringify(errorResponse);
+          errorResponse.error?.message || JSON.stringify(errorResponse);
       } catch {
         // If we can't parse the error response, use the status text
       }
@@ -126,8 +184,7 @@ export class QdrantHttpClient {
         errorDetails.includes('requires specified vector name') &&
         !vectorName
       ) {
-        errorDetails +=
-          '. Hint: Try setting a vector name (e.g., "dense" or "sparse")';
+        errorDetails += '. Hint: Try setting a vector name (e.g., "dense")';
       }
 
       throw new Error(
@@ -135,7 +192,46 @@ export class QdrantHttpClient {
       );
     }
 
-    const result = (await response.json()) as { result?: any[] };
+    const result = (await response.json()) as QdrantSearchResponse;
     return result.result || [];
+  }
+
+  async getAllPoints(
+    collectionName: string,
+    limit: number = 10000,
+  ): Promise<{ id: string | number; payload: PointPayload }[]> {
+    const requestBody: ScrollRequestBody = {
+      limit: limit,
+      with_payload: true,
+      with_vector: false,
+    };
+    const response = await this.makeRequest(
+      `/collections/${collectionName}/points/scroll`,
+      {
+        method: 'POST',
+        body: JSON.stringify(requestBody),
+      },
+    );
+
+    if (!response.ok) {
+      let errorDetails = response.statusText;
+      try {
+        const errorResponse = (await response.json()) as ApiResponse;
+        errorDetails =
+          errorResponse.error?.message || JSON.stringify(errorResponse);
+      } catch {
+        // If we can't parse the error response, use the status text
+      }
+      throw new Error(
+        `Failed to get points from collection '${collectionName}': ${errorDetails}`,
+      );
+    }
+
+    const result = (await response.json()) as QdrantScrollResponse;
+    const points = result.result?.points || [];
+    return points.map((point) => ({
+      id: point.id,
+      payload: point.payload as PointPayload,
+    }));
   }
 }

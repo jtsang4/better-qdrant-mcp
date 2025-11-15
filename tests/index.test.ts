@@ -1,8 +1,18 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { QdrantHttpClient } from '../src/client';
+import type { PointPayload, QdrantPoint } from '../src/types';
 
-// Mock fetch
-global.fetch = vi.fn();
+// Define mock response type
+interface MockResponse {
+  ok: boolean;
+  status: number;
+  statusText?: string;
+  json: ReturnType<typeof vi.fn>;
+}
+
+// Mock fetch with proper typing
+const mockFetch = vi.fn();
+global.fetch = mockFetch;
 
 describe('QdrantHttpClient', () => {
   let client: QdrantHttpClient;
@@ -16,17 +26,17 @@ describe('QdrantHttpClient', () => {
   });
 
   test('create collection', async () => {
-    const mockResponse = {
+    const mockResponse: MockResponse = {
       ok: true,
       status: 200,
       json: vi.fn().mockResolvedValue({ result: { status: 'ok' } }),
     };
 
-    (global.fetch as any).mockResolvedValue(mockResponse);
+    mockFetch.mockResolvedValue(mockResponse);
 
     await client.createCollection('test-collection', 1536);
 
-    expect(global.fetch).toHaveBeenCalledWith(
+    expect(mockFetch).toHaveBeenCalledWith(
       'http://localhost:6333/collections/test-collection',
       expect.objectContaining({
         method: 'PUT',
@@ -45,14 +55,14 @@ describe('QdrantHttpClient', () => {
   });
 
   test('create collection with conflict (status 409)', async () => {
-    const mockResponse = {
+    const mockResponse: MockResponse = {
       ok: false,
       status: 409,
       statusText: 'Conflict',
       json: vi.fn().mockResolvedValue({ error: 'already exists' }),
     };
 
-    (global.fetch as any).mockResolvedValue(mockResponse);
+    mockFetch.mockResolvedValue(mockResponse);
 
     // Should not throw on 409 status (collection already exists)
     await expect(
@@ -61,14 +71,14 @@ describe('QdrantHttpClient', () => {
   });
 
   test('create collection fails with other status', async () => {
-    const mockResponse = {
+    const mockResponse: MockResponse = {
       ok: false,
       status: 500,
       statusText: 'Internal Server Error',
       json: vi.fn().mockResolvedValue({ error: 'server error' }),
     };
 
-    (global.fetch as any).mockResolvedValue(mockResponse);
+    mockFetch.mockResolvedValue(mockResponse);
 
     await expect(
       client.createCollection('test-collection', 1536),
@@ -76,25 +86,31 @@ describe('QdrantHttpClient', () => {
   });
 
   test('upsert points', async () => {
-    const mockResponse = {
+    const mockResponse: MockResponse = {
       ok: true,
       status: 200,
       json: vi.fn().mockResolvedValue({ result: { status: 'ok' } }),
     };
 
-    (global.fetch as any).mockResolvedValue(mockResponse);
+    mockFetch.mockResolvedValue(mockResponse);
 
-    const points = [
+    const payload: PointPayload = {
+      information: 'test data',
+      stored_at: new Date().toISOString(),
+      text: 'test data', // Additional metadata
+    };
+
+    const points: QdrantPoint[] = [
       {
         id: '1',
         vector: [0.1, 0.2, 0.3],
-        payload: { text: 'test data' },
+        payload,
       },
     ];
 
     await client.upsertPoints('test-collection', points);
 
-    expect(global.fetch).toHaveBeenCalledWith(
+    expect(mockFetch).toHaveBeenCalledWith(
       'http://localhost:6333/collections/test-collection/points',
       expect.objectContaining({
         method: 'PUT',
@@ -108,7 +124,7 @@ describe('QdrantHttpClient', () => {
   });
 
   test('search points', async () => {
-    const mockResponse = {
+    const mockResponse: MockResponse = {
       ok: true,
       status: 200,
       json: vi.fn().mockResolvedValue({
@@ -116,13 +132,16 @@ describe('QdrantHttpClient', () => {
           {
             id: '1',
             score: 0.95,
-            payload: { information: 'test information' },
+            payload: {
+              information: 'test information',
+              stored_at: new Date().toISOString(),
+            },
           },
         ],
       }),
     };
 
-    (global.fetch as any).mockResolvedValue(mockResponse);
+    mockFetch.mockResolvedValue(mockResponse);
 
     const queryVector = [0.1, 0.2, 0.3];
     const results = await client.searchPoints('test-collection', queryVector);
@@ -131,11 +150,14 @@ describe('QdrantHttpClient', () => {
       {
         id: '1',
         score: 0.95,
-        payload: { information: 'test information' },
+        payload: {
+          information: 'test information',
+          stored_at: expect.any(String), // Match the ISO string timestamp
+        },
       },
     ]);
 
-    expect(global.fetch).toHaveBeenCalledWith(
+    expect(mockFetch).toHaveBeenCalledWith(
       'http://localhost:6333/collections/test-collection/points/search',
       expect.objectContaining({
         method: 'POST',
@@ -153,13 +175,13 @@ describe('QdrantHttpClient', () => {
   });
 
   test('search points with empty result', async () => {
-    const mockResponse = {
+    const mockResponse: MockResponse = {
       ok: true,
       status: 200,
       json: vi.fn().mockResolvedValue({ result: [] }),
     };
 
-    (global.fetch as any).mockResolvedValue(mockResponse);
+    mockFetch.mockResolvedValue(mockResponse);
 
     const queryVector = [0.1, 0.2, 0.3];
     const results = await client.searchPoints('test-collection', queryVector);
@@ -168,13 +190,13 @@ describe('QdrantHttpClient', () => {
   });
 
   test('search points with missing result property', async () => {
-    const mockResponse = {
+    const mockResponse: MockResponse = {
       ok: true,
       status: 200,
       json: vi.fn().mockResolvedValue({}),
     };
 
-    (global.fetch as any).mockResolvedValue(mockResponse);
+    mockFetch.mockResolvedValue(mockResponse);
 
     const queryVector = [0.1, 0.2, 0.3];
     const results = await client.searchPoints('test-collection', queryVector);

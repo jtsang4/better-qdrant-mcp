@@ -5,7 +5,12 @@ export default defineConfig({
     {
       format: 'esm',
       syntax: ['node 18'],
-      dts: true,
+      dts: {
+        distPath: './dist',
+        bundle: true, // Bundle types to generate index.d.ts in root
+      },
+      bundle: false, // Don't bundle to preserve module structure
+      autoExternal: true, // Externalize dependencies
     },
   ],
 });

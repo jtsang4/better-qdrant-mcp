@@ -7,10 +7,10 @@ A Model Context Protocol (MCP) server that provides tools to store and retrieve 
 - **qdrant-store**: Store information with optional metadata in Qdrant collections
 - **qdrant-find**: Retrieve relevant information using semantic search with vector name support
 - **qdrant-debug**: Debug tool to inspect collection data structure and content
-- Automatic collection creation
+- Automatic collection creation with named vectors support
 - OpenAI embedding generation for semantic search
 - Configurable default collection
-- Support for both dense and sparse vector search
+- Semantic search over dense embeddings
 - Built with TypeScript and modern tooling (Rslib, Biome, Vitest)
 
 ## Setup
@@ -59,12 +59,11 @@ Store some information in the Qdrant database.
 
 ### qdrant-find
 
-Retrieve relevant information from the Qdrant database using semantic search.
+Retrieve relevant information from the Qdrant database using semantic (dense) search.
 
 **Input:**
 
 - `query` (string, required): Query to use for searching
-- `vector_name` (string, optional): Name of the vector to use for searching. Available options: "dense" (recommended for semantic similarity), "sparse" (recommended for keyword matching). Default: "dense"
 - `collection_name` (string, optional): Name of the collection to search in. Required if no default collection is configured.
 
 **Returns:** Relevant information stored in the Qdrant database as separate messages, each with similarity scores.
