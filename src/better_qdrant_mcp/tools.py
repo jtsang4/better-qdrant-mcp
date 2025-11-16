@@ -7,9 +7,10 @@ import json
 from .config import get_settings
 from .embeddings import Embeddings, SparseEmbeddings
 from .qdr_client import QdrClient
+from .version import __version__
 
 
-mcp = FastMCP("qdrant-mcp-python")
+mcp = FastMCP("better-qdrant-mcp", version=__version__)
 _qdr = QdrClient()
 _settings = get_settings()
 
