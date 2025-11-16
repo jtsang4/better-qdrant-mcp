@@ -1,7 +1,7 @@
-from .tools import run  # re-export entrypoint
+from .tools import run, main  # re-export entrypoints
 from .version import __version__
 
-__all__ = ["run", "hello", "__version__"]
+__all__ = ["run", "main", "hello", "__version__"]
 
 
 def hello() -> str:

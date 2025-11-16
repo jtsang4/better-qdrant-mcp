@@ -1,4 +1,4 @@
-from .tools import run
+from .tools import main
 
 if __name__ == "__main__":
-    run()
+    main()

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from typing import Any, Dict, Optional
+import os
+import argparse
 from fastmcp import FastMCP
 import json
 
@@ -172,6 +174,65 @@ def memory_debug(
     return "\n".join(out)
 
 
-def run() -> None:
-    # Default transport is stdio in fastmcp; be explicit
-    mcp.run(transport="stdio")
+def run(transport: str = "stdio", host: str = "0.0.0.0", port: int = 8000, path: str = "/mcp") -> None:
+    """
+    Run the MCP server with specified transport.
+
+    Args:
+        transport: Transport type ("stdio", "sse", or "streamable-http")
+        host: Host for HTTP-based transports (default: 0.0.0.0)
+        port: Port for HTTP-based transports (default: 8000)
+        path: Path for HTTP-based transports (default: /mcp)
+    """
+    if transport == "stdio":
+        # Default stdio transport
+        mcp.run(transport="stdio")
+    elif transport == "sse":
+        # Server-Sent Events transport
+        mcp.run(transport="sse", host=host, port=port, path="/sse")
+    elif transport == "streamable-http":
+        # Streamable HTTP transport (newer standard)
+        mcp.run(transport="streamable-http", host=host, port=port, path=path)
+    else:
+        raise ValueError(f"Unsupported transport: {transport}. Use 'stdio', 'sse', or 'streamable-http'")
+
+
+def main() -> None:
+    """Entry point for command line interface with transport options."""
+    parser = argparse.ArgumentParser(description="Better Qdrant MCP Server")
+    parser.add_argument(
+        "--transport",
+        choices=["stdio", "sse", "streamable-http"],
+        default="stdio",
+        help="Transport type for MCP server (default: stdio)"
+    )
+    parser.add_argument(
+        "--host",
+        default="0.0.0.0",
+        help="Host for HTTP-based transports (default: 0.0.0.0)"
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8000,
+        help="Port for HTTP-based transports (default: 8000)"
+    )
+    parser.add_argument(
+        "--path",
+        default="/mcp",
+        help="Path for HTTP-based transports (default: /mcp)"
+    )
+
+    args = parser.parse_args()
+
+    # Support environment variables as fallback
+    transport = os.getenv("MCP_TRANSPORT", args.transport)
+    host = os.getenv("MCP_HOST", args.host)
+    port = int(os.getenv("MCP_PORT", str(args.port)))
+    path = os.getenv("MCP_PATH", args.path)
+
+    print(f"Starting Better Qdrant MCP Server with {transport} transport...")
+    if transport != "stdio":
+        print(f"Server will be available at http://{host}:{port}{path if transport == 'streamable-http' else '/sse'}")
+
+    run(transport=transport, host=host, port=port, path=path)
