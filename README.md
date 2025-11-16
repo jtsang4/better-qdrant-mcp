@@ -66,3 +66,13 @@ Configure in MCP clients as a stdio server. Example (cursor-like):
 - memory-debug(collection_name?: str) -> str
 
 `memory-search` uses hybrid search in Qdrant (dense + sparse). If the collection is configured with named vectors `dense` and `sparse`, queries are ranked by fusing dense OpenAI embeddings and sparse BM25 scores; otherwise it falls back to dense-only search.
+
+## Development tips
+
+For local development, you can use the provided `Makefile`:
+
+```bash
+make build
+```
+
+This command will first clean the `dist` directory and then run `uv build` to produce fresh artifacts.
