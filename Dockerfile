@@ -5,16 +5,14 @@ FROM ghcr.io/astral-sh/uv:python3.12-bookworm AS builder
 # Set working directory
 WORKDIR /app
 
-# Copy dependency definition (keeps build cache stable when code changes)
-COPY pyproject.toml ./
-
-# Create virtual environment and sync dependencies into it
-RUN uv venv /opt/venv && \
-    VIRTUAL_ENV=/opt/venv uv sync --no-dev
-
-# Copy application source code and install the project into the venv
+# Copy dependency definition, README and source code so uv can build the local project
+COPY pyproject.toml README.md ./
 COPY src/ ./src/
-RUN VIRTUAL_ENV=/opt/venv uv pip install --no-cache .
+
+# Create virtual environment and sync dependencies into it (including this project)
+RUN uv venv /opt/venv && \
+    VIRTUAL_ENV=/opt/venv uv sync --no-dev && \
+    VIRTUAL_ENV=/opt/venv uv pip install --no-cache .
 
 # Stage 2: Runtime stage
 FROM python:3.12-slim-bookworm
