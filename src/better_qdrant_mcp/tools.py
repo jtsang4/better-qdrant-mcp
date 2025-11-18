@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Union, Annotated
 import os
 import argparse
 from fastmcp import FastMCP
+from pydantic import Field, BeforeValidator
 import json
 
 from .config import get_settings
@@ -17,6 +18,12 @@ _qdr = QdrClient()
 _settings = get_settings()
 
 
+def _ensure_list(v: Any) -> List[str]:
+    if isinstance(v, str):
+        return [v]
+    return v
+
+
 @mcp.tool(
     name="memory-store",
     description=(
@@ -25,30 +32,47 @@ _settings = get_settings()
     ),
 )
 def memory_store(
-    information: str,
-    metadata: Optional[Dict[str, Any]] = None,
-    collection_name: Optional[str] = None,
+    content: str = Field(
+        ..., description="The main text content to store as long-term memory."
+    ),
+    title: str = Field(
+        "", description="Optional title for the content, helpful for search context."
+    ),
+    tags: List[str] = Field(
+        default_factory=list, description="Optional list of tags for categorization."
+    ),
+    metadata: Dict[str, Any] = Field(
+        default_factory=dict, description="Optional JSON metadata to attach."
+    ),
+    collection_name: str = Field(
+        "", description="Optional collection to use; defaults to env COLLECTION_NAME."
+    ),
 ) -> str:
     """Store text into Qdrant with dense vectors produced by OpenAI embeddings.
 
-    information: The main text content to store as long-term memory
-    metadata: Optional JSON metadata to attach
-    collection_name: Optional collection to use; defaults to env COLLECTION_NAME
+    Returns:
+        Confirmation message with the ID of the stored item.
     """
     collection = collection_name or _settings.default_collection
     if not collection:
         raise ValueError("Collection name is required")
 
-    vector = Embeddings.embed_one(information)
+    # Combine title and content for embedding to improve semantic search
+    text_to_embed = f"{title}\n{content}" if title else content
+    vector = Embeddings.embed_one(text_to_embed)
 
     # Ensure collection exists with the right dimensionality for dense vectors
     _qdr.ensure_collection(collection, len(vector))
 
-    point_id = str(__import__("time").time_ns())
+    point_id = str(__import__("uuid").uuid4())
     payload: Dict[str, Any] = {
-        "information": information,
+        "content": content,
         "stored_at": __import__("datetime").datetime.utcnow().isoformat() + "Z",
     }
+    if title:
+        payload["title"] = title
+    if tags:
+        payload["tags"] = tags
     if metadata:
         payload["metadata"] = metadata
 
@@ -62,14 +86,20 @@ def memory_store(
 
     point: Dict[str, Any] = {
         "id": point_id,
-        "vector": {"dense": vector} if has_named_dense else vector,
         "payload": payload,
     }
 
-    if has_sparse:
-        indices, values = SparseEmbeddings.embed_one(information)
-        if indices and values:
-            point["sparse_vectors"] = {"sparse": {"indices": indices, "values": values}}
+    if has_named_dense:
+        # Named vectors: "dense" + optionally "sparse"
+        vectors_dict = {"dense": vector}
+        if has_sparse:
+            indices, values = SparseEmbeddings.embed_one(text_to_embed)
+            if indices and values:
+                vectors_dict["sparse"] = {"indices": indices, "values": values}
+        point["vector"] = vectors_dict
+    else:
+        # Legacy single vector
+        point["vector"] = vector
 
     _qdr.upsert_points(collection, [point])
 
@@ -83,11 +113,22 @@ def memory_store(
     ),
 )
 def memory_search(
-    query: str,
-    limit: int = 5,
-    collection_name: Optional[str] = None,
+    query: str = Field(
+        ..., description="The search query text to find relevant memories."
+    ),
+    limit: int = Field(
+        5, description="Maximum number of results to return (default: 5)."
+    ),
+    collection_name: str = Field(
+        "",
+        description="Optional collection to target; defaults to env COLLECTION_NAME.",
+    ),
 ) -> str:
-    """Search for similar items in Qdrant using OpenAI embeddings for the query."""
+    """Search for similar items in Qdrant using OpenAI embeddings for the query.
+
+    Returns:
+        JSON string containing a list of search results, each with 'score', 'point_id', and 'payload'.
+    """
     collection = collection_name or _settings.default_collection
     if not collection:
         raise ValueError("Collection name is required")
@@ -136,6 +177,7 @@ def memory_search(
             {
                 "score": r.get("score", 0.0),
                 "id": r.get("id"),
+                "point_id": r.get("id"),
                 "payload": r.get("payload", {}),
             }
         )
@@ -150,8 +192,16 @@ def memory_search(
     ),
 )
 def memory_debug(
-    collection_name: Optional[str] = None,
+    collection_name: str = Field(
+        "",
+        description="Optional collection to inspect; defaults to env COLLECTION_NAME.",
+    ),
 ) -> str:
+    """Inspect collection configuration and sample data.
+
+    Returns:
+        A formatted string containing collection info and sample data points.
+    """
     collection = collection_name or _settings.default_collection
     if not collection:
         raise ValueError("Collection name is required")
@@ -174,7 +224,47 @@ def memory_debug(
     return "\n".join(out)
 
 
-def run(transport: str = "stdio", host: str = "0.0.0.0", port: int = 8000, path: str = "/mcp") -> None:
+@mcp.tool(
+    name="memory-delete",
+    description=(
+        "Delete one or more stored memory items from Qdrant by their point IDs. "
+        "Use the 'point_id' field returned from memory-search as input."
+    ),
+)
+def memory_delete(
+    ids: Annotated[List[str], BeforeValidator(_ensure_list)] = Field(
+        ...,
+        description="A single point ID or a list of point IDs to delete. Use the 'point_id' from memory-search results.",
+    ),
+    collection_name: str = Field(
+        "",
+        description="Optional collection to target; defaults to env COLLECTION_NAME.",
+    ),
+) -> str:
+    """Delete one or more memory points by their Qdrant IDs.
+
+    Returns:
+        Confirmation message of the number of deleted items.
+    """
+    collection = collection_name or _settings.default_collection
+    if not collection:
+        raise ValueError("Collection name is required")
+
+    if not ids:
+        raise ValueError("At least one ID is required to delete memory")
+
+    # Input is already normalized to List[str] by validator
+    _qdr.delete_points(collection, ids)
+
+    return f"Deleted {len(ids)} item(s) from collection '{collection}'"
+
+
+def run(
+    transport: str = "stdio",
+    host: str = "0.0.0.0",
+    port: int = 8000,
+    path: str = "/mcp",
+) -> None:
     """
     Run the MCP server with specified transport.
 
@@ -194,7 +284,9 @@ def run(transport: str = "stdio", host: str = "0.0.0.0", port: int = 8000, path:
         # Streamable HTTP transport (newer standard)
         mcp.run(transport="streamable-http", host=host, port=port, path=path)
     else:
-        raise ValueError(f"Unsupported transport: {transport}. Use 'stdio', 'sse', or 'streamable-http'")
+        raise ValueError(
+            f"Unsupported transport: {transport}. Use 'stdio', 'sse', or 'streamable-http'"
+        )
 
 
 def main() -> None:
@@ -204,23 +296,21 @@ def main() -> None:
         "--transport",
         choices=["stdio", "sse", "streamable-http"],
         default="stdio",
-        help="Transport type for MCP server (default: stdio)"
+        help="Transport type for MCP server (default: stdio)",
     )
     parser.add_argument(
         "--host",
         default="0.0.0.0",
-        help="Host for HTTP-based transports (default: 0.0.0.0)"
+        help="Host for HTTP-based transports (default: 0.0.0.0)",
     )
     parser.add_argument(
         "--port",
         type=int,
         default=8000,
-        help="Port for HTTP-based transports (default: 8000)"
+        help="Port for HTTP-based transports (default: 8000)",
     )
     parser.add_argument(
-        "--path",
-        default="/mcp",
-        help="Path for HTTP-based transports (default: /mcp)"
+        "--path", default="/mcp", help="Path for HTTP-based transports (default: /mcp)"
     )
 
     args = parser.parse_args()
@@ -233,6 +323,8 @@ def main() -> None:
 
     print(f"Starting Better Qdrant MCP Server with {transport} transport...")
     if transport != "stdio":
-        print(f"Server will be available at http://{host}:{port}{path if transport == 'streamable-http' else '/sse'}")
+        print(
+            f"Server will be available at http://{host}:{port}{path if transport == 'streamable-http' else '/sse'}"
+        )
 
     run(transport=transport, host=host, port=port, path=path)

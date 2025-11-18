@@ -58,10 +58,18 @@ class QdrClient:
                     id=p["id"],
                     vector=p.get("vector"),
                     payload=p.get("payload"),
-                    sparse_vectors=p.get("sparse_vectors"),
                 )
                 for p in points
             ],
+        )
+
+    def delete_points(self, name: str, ids: List[str]) -> None:
+        # Delete one or more points by their IDs
+        if not ids:
+            return
+        self._client.delete(
+            collection_name=name,
+            points_selector=qm.PointIdsList(points=ids),
         )
 
     def search(

@@ -1,6 +1,6 @@
 [project]
 name = "better-qdrant-mcp"
-version = "0.3.1"
+version = "0.4.0"
 description = "A Python MCP server for Qdrant memory storage and semantic search, compatible with Cursor-like MCP clients."
 readme = "README.md"
 authors = [{ name = "jtsang4", email = "info@jtsang.me" }]
@@ -25,11 +25,12 @@ dependencies = [
     "fastembed>=0.7.3",
     "fastmcp>=2.13.1",
     "jieba>=0.42.1",
-    "openai>=1.47.0",
-    "qdrant-client>=1.15.1",
+    "openai>=2.8.1",
+    "qdrant-client==1.15.1",
     # HTTP transport dependencies for SSE and streamable HTTP
     "uvicorn>=0.30.0",
     "starlette>=0.40.0",
+    "pydantic>=2.12.4",
 ]
 
 [project.urls]
